@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>City DNA: Radial Profile (1927-2022)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .controls { display: flex; flex-direction: column; align-items: center; gap: 20px; background: white; padding: 20px 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; width: 600px; }
+        .slider-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
+        input[type="range"] { width: 100%; margin-top: 10px; cursor: pointer; }
+        
+        #yearLabel { font-size: 2em; font-weight: bold; color: #2c3e50; }
+        #eraLabel { font-size: 1.1em; font-weight: bold; color: #ff7f0e; min-height: 25px; margin-top: 5px; transition: color 0.3s; }
+        .industrial-era { color: #1f77b4 !important; }
+        
+        .checkbox-container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; width: 100%; border-top: 1px solid #eee; padding-top: 15px; }
+        .checkbox-item { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+        .legend-color { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+        
+        #chart { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .tooltip { position: absolute; padding: 12px; font-size: 14px; background: rgba(255, 255, 255, 0.95); border: 1px solid #ccc; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.1s; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 1000; line-height: 1.5; }
+        .axis-label { font-size: 13px; font-weight: bold; fill: #444; }
+    </style>
+</head>
+<body>
+
+    <h1 style="margin-bottom: 5px;">City Profile: Socio-Economic Evolution</h1>
+    <p style="color: #666; margin-top: 0; margin-bottom: 20px;">Exploring the impact of the industrial gravity well on Turkish cities.</p>
+
+    <div class="controls">
+        <div class="slider-container">
+            <span id="yearLabel">1927</span>
+            <span id="eraLabel">Agrarian Era</span>
+            <input type="range" id="yearSlider" min="0" max="29" step="1" value="0">
+        </div>
+        <div class="checkbox-container" id="cityCheckboxes"></div>
+    </div>
+
+    <div id="chart"></div>
+    <div class="tooltip" id="tooltip"></div>
+
+<script>
+window.onload = function() {
+    const csvData = `Year,City,Pop_Growth_Index,Manufacturing_Index,Education_Index,Healthcare_Index
+1927,Istanbul,100.0,16.9,0.5,54.0
+1927,Ankara,100.0,10.3,0.5,61.7
+1927,Izmir,100.0,14.1,0.5,46.3
+1927,Adana,100.0,11.3,0.5,31.0
+1927,Mugla,100.0,3.8,0.5,15.7
+1927,Van,100.0,2.8,0.5,5.0
+1935,Istanbul,183.1,17.6,0.5,60.6
+1935,Ankara,153.2,10.8,0.5,67.2
+1935,Izmir,114.7,14.7,0.5,54.1
+1935,Adana,114.7,11.7,0.5,38.1
+1935,Mugla,114.7,3.9,0.5,24.4
+1935,Van,114.7,2.9,0.5,5.0
+1940,Istanbul,235.0,18.0,0.5,64.7
+1940,Ankara,186.4,11.0,0.5,70.6
+1940,Izmir,123.8,15.0,0.5,58.8
+1940,Adana,123.8,12.0,0.5,44.4
+1940,Mugla,123.8,4.0,0.5,29.8
+1940,Van,123.8,3.0,0.5,5.0
+1945,Istanbul,287.0,18.5,0.6,68.8
+1945,Ankara,219.7,11.3,0.5,74.0
+1945,Izmir,133.0,15.4,0.5,63.6
+1945,Adana,133.0,12.3,0.5,50.8
+1945,Mugla,133.0,4.1,0.5,37.3
+1945,Van,133.0,3.1,0.5,5.0
+1950,Istanbul,338.9,24.1,1.0,72.9
+1950,Ankara,252.9,14.7,0.8,77.4
+1950,Izmir,142.2,20.1,0.6,68.4
+1950,Adana,142.2,16.1,0.5,57.1
+1950,Mugla,142.2,5.4,0.5,44.8
+1950,Van,142.2,4.0,0.5,24.8
+1955,Istanbul,426.3,24.7,3.0,76.6
+1955,Ankara,305.6,15.1,2.4,80.5
+1955,Izmir,157.0,20.6,1.8,72.7
+1955,Adana,157.0,16.5,1.0,62.8
+1955,Mugla,157.0,5.5,0.6,52.0
+1955,Van,157.0,4.1,0.6,34.5
+1960,Istanbul,513.6,25.4,6.5,80.3
+1960,Ankara,358.3,15.5,5.2,83.6
+1960,Izmir,171.7,21.2,3.9,77.0
+1960,Adana,171.7,16.9,2.1,68.6
+1960,Mugla,171.7,5.6,1.3,59.3
+1960,Van,171.7,4.2,1.3,44.2
+1965,Istanbul,601.0,26.0,10.3,84.0
+1965,Ankara,411.0,15.9,8.2,86.7
+1965,Izmir,186.5,21.7,6.2,81.4
+1965,Adana,186.5,17.4,3.3,74.3
+1965,Mugla,186.5,5.8,2.1,66.5
+1965,Van,186.5,4.3,2.1,53.9
+1970,Istanbul,688.3,26.7,14.3,87.7
+1970,Ankara,463.7,16.3,11.5,89.8
+1970,Izmir,201.2,22.2,8.6,85.7
+1970,Adana,201.2,17.8,4.6,80.1
+1970,Mugla,201.2,5.9,2.9,73.7
+1970,Van,201.2,4.4,2.9,63.6
+1975,Istanbul,775.7,27.3,18.6,91.4
+1975,Ankara,516.4,16.7,14.9,92.8
+1975,Izmir,216.0,22.8,11.1,90.0
+1975,Adana,216.0,18.2,5.9,85.8
+1975,Mugla,216.0,6.1,3.7,81.0
+1975,Van,216.0,4.6,3.7,73.3
+1980,Istanbul,863.0,34.4,23.1,93.4
+1980,Ankara,569.1,21.0,18.5,94.5
+1980,Izmir,230.7,28.6,13.9,92.3
+1980,Adana,230.7,22.9,7.4,88.4
+1980,Mugla,230.7,7.6,4.6,85.9
+1980,Van,230.7,5.7,4.6,81.2
+1985,Istanbul,950.4,34.0,23.3,95.5
+1985,Ankara,621.8,20.8,18.6,96.3
+1985,Izmir,245.5,28.3,14.0,94.8
+1985,Adana,245.5,22.7,7.4,92.1
+1985,Mugla,245.5,7.6,4.7,90.4
+1985,Van,245.5,5.7,4.7,86.9
+1990,Istanbul,1037.8,33.7,24.8,96.2
+1990,Ankara,674.5,20.6,19.8,96.8
+1990,Izmir,260.2,28.1,14.9,95.6
+1990,Adana,260.2,22.5,7.9,93.4
+1990,Mugla,260.2,7.5,5.0,91.9
+1990,Van,260.2,5.6,5.0,89.0
+2000,Istanbul,1212.5,32.0,21.5,96.6
+2000,Ankara,779.8,19.6,17.2,97.2
+2000,Izmir,289.7,26.7,12.9,96.0
+2000,Adana,289.7,21.4,6.9,94.9
+2000,Mugla,289.7,7.1,4.3,93.8
+2000,Van,289.7,5.3,4.3,91.5
+2007,Istanbul,1334.7,33.5,27.1,97.7
+2007,Ankara,853.6,20.5,21.7,98.1
+2007,Izmir,310.4,27.9,16.3,97.4
+2007,Adana,310.4,22.3,8.7,96.6
+2007,Mugla,310.4,7.4,5.4,95.9
+2007,Van,310.4,5.6,5.4,94.3
+2008,Istanbul,1352.2,33.7,28.2,97.8
+2008,Ankara,864.2,20.6,22.6,98.2
+2008,Izmir,313.3,28.1,16.9,97.4
+2008,Adana,313.3,22.5,9.0,96.7
+2008,Mugla,313.3,7.5,5.6,96.0
+2008,Van,313.3,5.6,5.6,94.5
+2009,Istanbul,1369.7,33.9,29.3,97.9
+2009,Ankara,874.7,20.7,23.5,98.3
+2009,Izmir,316.3,28.3,17.6,97.5
+2009,Adana,316.3,22.6,9.4,96.8
+2009,Mugla,316.3,7.5,5.9,96.1
+2009,Van,316.3,5.6,5.9,94.6
+2010,Istanbul,1387.1,34.1,30.5,98.0
+2010,Ankara,885.2,20.9,24.4,98.3
+2010,Izmir,319.2,28.4,18.3,97.6
+2010,Adana,319.2,22.8,9.8,96.9
+2010,Mugla,319.2,7.6,6.1,96.2
+2010,Van,319.2,5.7,6.1,94.8
+2011,Istanbul,1404.6,34.3,31.7,98.0
+2011,Ankara,895.8,21.0,25.4,98.4
+2011,Izmir,322.2,28.6,19.0,97.7
+2011,Adana,322.2,22.9,10.1,97.0
+2011,Mugla,322.2,7.6,6.3,96.3
+2011,Van,322.2,5.7,6.3,95.0
+2012,Istanbul,1422.0,34.5,32.9,98.1
+2012,Ankara,906.3,21.1,26.4,98.4
+2012,Izmir,325.2,28.8,19.8,97.7
+2012,Adana,325.2,23.0,10.5,97.1
+2012,Mugla,325.2,7.7,6.6,96.4
+2012,Van,325.2,5.8,6.6,95.1
+2013,Istanbul,1439.5,34.7,34.2,98.2
+2013,Ankara,916.9,21.2,27.4,98.5
+2013,Izmir,328.1,28.9,20.5,97.8
+2013,Adana,328.1,23.2,10.9,97.2
+2013,Mugla,328.1,7.7,6.8,96.5
+2013,Van,328.1,5.8,6.8,95.2
+2014,Istanbul,1457.0,34.9,35.5,98.2
+2014,Ankara,927.4,21.3,28.4,98.5
+2014,Izmir,331.1,29.1,21.3,97.9
+2014,Adana,331.1,23.3,11.4,97.3
+2014,Mugla,331.1,7.8,7.1,96.6
+2014,Van,331.1,5.8,7.1,95.3
+2015,Istanbul,1474.4,35.1,36.8,98.3
+2015,Ankara,937.9,21.5,29.4,98.5
+2015,Izmir,334.0,29.3,22.1,97.9
+2015,Adana,334.0,23.4,11.8,97.3
+2015,Mugla,334.0,7.8,7.4,96.7
+2015,Van,334.0,5.9,7.4,95.5
+2016,Istanbul,1491.9,35.3,38.1,98.3
+2016,Ankara,948.5,21.6,30.5,98.6
+2016,Izmir,337.0,29.5,22.9,98.0
+2016,Adana,337.0,23.6,12.2,97.4
+2016,Mugla,337.0,7.9,7.6,96.8
+2016,Van,337.0,5.9,7.6,95.6
+2017,Istanbul,1509.3,35.6,39.5,98.4
+2017,Ankara,959.0,21.7,31.6,98.6
+2017,Izmir,339.9,29.6,23.7,98.0
+2017,Adana,339.9,23.7,12.6,97.5
+2017,Mugla,339.9,7.9,7.9,96.9
+2017,Van,339.9,5.9,7.9,95.8
+2018,Istanbul,1526.8,35.8,40.9,98.4
+2018,Ankara,969.6,21.9,32.7,98.7
+2018,Izmir,342.9,29.8,24.5,98.1
+2018,Adana,342.9,23.8,13.1,97.5
+2018,Mugla,342.9,7.9,8.2,97.0
+2018,Van,342.9,6.0,8.2,95.9
+2019,Istanbul,1544.3,36.0,42.3,98.5
+2019,Ankara,980.1,22.0,33.9,98.7
+2019,Izmir,345.8,30.0,25.4,98.1
+2019,Adana,345.8,24.0,13.6,97.6
+2019,Mugla,345.8,8.0,8.5,97.0
+2019,Van,345.8,6.0,8.5,96.0
+2020,Istanbul,1561.7,36.2,43.8,98.5
+2020,Ankara,990.6,22.1,35.0,98.7
+2020,Izmir,348.8,30.2,26.3,98.2
+2020,Adana,348.8,24.1,14.0,97.7
+2020,Mugla,348.8,8.0,8.8,97.1
+2020,Van,348.8,6.0,8.8,96.1
+2021,Istanbul,1579.2,36.4,45.3,98.6
+2021,Ankara,1001.2,22.2,36.2,98.8
+2021,Izmir,351.7,30.3,27.2,98.2
+2021,Adana,351.7,24.3,14.5,97.7
+2021,Mugla,351.7,8.1,9.1,97.2
+2021,Van,351.7,6.1,9.1,96.2
+2022,Istanbul,1596.6,39.8,46.8,98.7
+2022,Ankara,1011.7,24.3,37.5,98.8
+2022,Izmir,354.7,33.1,28.1,98.3
+2022,Adana,354.7,26.5,15.0,97.8
+2022,Mugla,354.7,8.8,9.4,97.3
+2022,Van,354.7,6.6,9.4,96.3`;
+
+    const displayNames = {
+        "Istanbul": "İstanbul", "Ankara": "Ankara", "Izmir": "İzmir", 
+        "Adana": "Adana", "Mugla": "Muğla", "Van": "Van"
+    };
+
+    const data = d3.csvParse(csvData, d => ({
+        Year: +d.Year,
+        City: d.City,
+        PopGrowth: +d.Pop_Growth_Index,
+        Manufacturing: +d.Manufacturing_Index,
+        Education: +d.Education_Index,
+        Healthcare: +d.Healthcare_Index
+    }));
+
+    const years = [...new Set(data.map(d => d.Year))].sort((a,b) => a - b);
+    const cities = ["Istanbul", "Ankara", "Izmir", "Adana", "Mugla", "Van"];
+    const colors = { "Istanbul": "#1f77b4", "Ankara": "#9467bd", "Izmir": "#17becf", "Adana": "#ff7f0e", "Mugla": "#2ca02c", "Van": "#8c564b" };
+    
+    const features = ["PopGrowth", "Manufacturing", "Education", "Healthcare"];
+    const maxValues = { PopGrowth: 1800, Manufacturing: 55, Education: 50, Healthcare: 100 };
+    const featureNames = {PopGrowth: "Population Growth", Manufacturing: "Manufacturing Index", Education: "Higher Education Index", Healthcare: "Healthcare Access Index"};
+
+    const sliderEl = document.getElementById("yearSlider");
+    const labelEl = document.getElementById("yearLabel");
+    const eraEl = document.getElementById("eraLabel");
+    sliderEl.max = years.length - 1; 
+
+    sliderEl.addEventListener("input", function(e) {
+        const currentYear = years[parseInt(e.target.value)];
+        labelEl.innerText = currentYear;
+        
+        if (currentYear < 1980) {
+            eraEl.innerText = "Agrarian Era";
+            eraEl.className = "";
+        } else if (currentYear === 1980 || currentYear === 1985) {
+            eraEl.innerText = "The Industrial Pivot";
+            eraEl.className = "industrial-era";
+        } else {
+            eraEl.innerText = "Industrial / Services Era";
+            eraEl.className = "industrial-era";
+        }
+        
+        updateChart();
+    });
+
+    const cbContainer = document.getElementById("cityCheckboxes");
+    cities.forEach(city => {
+        const label = document.createElement("label");
+        label.className = "checkbox-item";
+        
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = city;
+        cb.checked = ["Istanbul", "Adana", "Van"].includes(city);
+        cb.addEventListener("change", updateChart);
+        
+        const colorDot = document.createElement("span");
+        colorDot.className = "legend-color";
+        colorDot.style.backgroundColor = colors[city];
+        
+        const text = document.createElement("span");
+        text.innerText = displayNames[city];
+
+        label.appendChild(cb);
+        label.appendChild(colorDot);
+        label.appendChild(text);
+        cbContainer.appendChild(label);
+    });
+
+    const width = 750, height = 650, margin = 120;
+    const radius = Math.min(width, height) / 2 - margin;
+    const svg = d3.select("#chart").append("svg")
+                  .attr("width", width).attr("height", height)
+                  .append("g").attr("transform", `translate(${width/2},${height/2})`);
+
+    const angleSlice = Math.PI * 2 / features.length;
+    const radialScale = d3.scaleLinear().range([0, radius]).domain([0, 1]); 
+    
+    const gridCircles = [0.25, 0.5, 0.75, 1];
+    svg.selectAll(".gridCircle").data(gridCircles).enter().append("circle")
+       .attr("class", "gridCircle").attr("r", d => radius * d)
+       .style("fill", "none").style("stroke", "#e0e0e0").style("stroke-dasharray", "4,4");
+
+    const axes = svg.selectAll(".axis").data(features).enter().append("g").attr("class", "axis");
+    axes.append("line").attr("x1", 0).attr("y1", 0)
+        .attr("x2", (d, i) => radialScale(1.05) * Math.cos(angleSlice * i - Math.PI/2))
+        .attr("y2", (d, i) => radialScale(1.05) * Math.sin(angleSlice * i - Math.PI/2))
+        .style("stroke", "#ccc").style("stroke-width", "2px");
+    
+    // Pushed labels out to 1.35 so they clear the chart entirely
+    axes.append("text").attr("class", "axis-label")
+        .attr("x", (d, i) => radialScale(1.35) * Math.cos(angleSlice * i - Math.PI/2))
+        .attr("y", (d, i) => radialScale(1.35) * Math.sin(angleSlice * i - Math.PI/2))
+        .text(d => featureNames[d]).style("text-anchor", "middle").style("alignment-baseline", "middle");
+
+    const radarLine = d3.lineRadial()
+        .angle((d, i) => i * angleSlice)
+        .radius(d => radialScale(d.value / maxValues[d.feature]))
+        .curve(d3.curveLinearClosed);
+
+    function updateChart() {
+        const selectedYear = years[parseInt(sliderEl.value)];
+        const checkboxes = document.querySelectorAll('.checkbox-item input:checked');
+        const selectedCities = Array.from(checkboxes).map(cb => cb.value);
+        
+        const filteredData = data.filter(d => d.Year === selectedYear && selectedCities.includes(d.City));
+        
+        const chartData = filteredData.map(d => ({
+            city: d.City,
+            displayName: displayNames[d.City],
+            color: colors[d.City],
+            values: features.map(f => ({ feature: f, value: d[f], rawValue: d[f] }))
+        }));
+
+        const polygons = svg.selectAll(".radarArea").data(chartData, d => d.city);
+        
+        polygons.enter()
+            .append("path").attr("class", "radarArea")
+            .style("fill", d => d.color).style("fill-opacity", 0.15)
+            .style("stroke", d => d.color).style("stroke-width", "3px")
+            .attr("d", d => radarLine(d.values))
+            .merge(polygons)
+            .transition().duration(400)
+            .attr("d", d => radarLine(d.values));
+            
+        polygons.exit().remove();
+
+        svg.selectAll(".radarDotGroup").remove(); 
+        const dotGroups = svg.selectAll(".radarDotGroup").data(chartData).enter().append("g").attr("class", "radarDotGroup");
+        
+        dotGroups.selectAll(".radarDot")
+            .data(d => d.values.map(v => ({...v, displayName: d.displayName, color: d.color})))
+            .enter().append("circle").attr("class", "radarDot")
+            .attr("r", 6).style("fill", d => d.color)
+            .attr("cx", (d, i) => radialScale(d.value / maxValues[d.feature]) * Math.cos(angleSlice * i - Math.PI/2))
+            .attr("cy", (d, i) => radialScale(d.value / maxValues[d.feature]) * Math.sin(angleSlice * i - Math.PI/2))
+            .on("mouseover", function(event, d) {
+                d3.select(this).attr("r", 10).style("stroke", "#333").style("stroke-width", "2px");
+                
+                // Tooltip uses pageX and pageY, which are absolute coordinates
+                d3.select("#tooltip")
+                  .style("opacity", 1)
+                  .html(`<strong>${d.displayName}</strong><br/>${featureNames[d.feature]}: ${d.rawValue.toFixed(1)}`)
+                  .style("left", (event.pageX + 15) + "px")
+                  .style("top", (event.pageY - 15) + "px");
+            })
+            .on("mouseout", function() {
+                d3.select(this).attr("r", 6).style("stroke", "none");
+                d3.select("#tooltip").style("opacity", 0);
+            });
+    }
+
+    updateChart();
+}; 
+</script>
+</body>
+</html>
